@@ -41,8 +41,40 @@ router.post('/', (req, res) => {
   workouts.push(created);
   return res.status(201).json({ message: 'Rutina creada.', data: created }); // 201
 });
-router.put('/:id', (req, res) => res.status(501).json({ error: 'Not Implemented' }));
-router.patch('/:id', (req, res) => res.status(501).json({ error: 'Not Implemented' }));
+// EV09 Paso 8 — PUT: actualización COMPLETA (exige todos los campos)
+router.put('/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const index = workouts.findIndex((w) => w.id === id);
+  if (index === -1) {
+    return res.status(404).json({ error: 'Not Found', message: `Rutina ${id} no existe.` });
+  }
+  const { userId, name, date, durationMin, level } = req.body || {};
+  if (!userId || !name || !date || durationMin === undefined || !level) {
+    return res.status(400).json({ error: 'Bad Request', message: 'PUT exige recurso completo: userId, name, date, durationMin, level.' });
+  }
+  workouts[index] = { id, userId, name, date, durationMin, level };
+  return res.status(200).json({ message: 'Rutina actualizada (PUT).', data: workouts[index] });
+});
+
+// EV09 Paso 8 — PATCH: actualización PARCIAL (solo campos enviados)
+router.patch('/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const workout = workouts.find((w) => w.id === id);
+  if (!workout) {
+    return res.status(404).json({ error: 'Not Found', message: `Rutina ${id} no existe.` });
+  }
+  const allowed = ['userId', 'name', 'date', 'durationMin', 'level'];
+  const keys = Object.keys(req.body || {});
+  if (keys.length === 0) {
+    return res.status(400).json({ error: 'Bad Request', message: 'PATCH requiere al menos un campo.' });
+  }
+  const invalid = keys.filter((k) => !allowed.includes(k));
+  if (invalid.length > 0) {
+    return res.status(400).json({ error: 'Bad Request', message: `Campos no permitidos: ${invalid.join(', ')}` });
+  }
+  Object.assign(workout, req.body);
+  return res.status(200).json({ message: 'Rutina actualizada (PATCH).', data: workout });
+});
 router.delete('/:id', (req, res) => res.status(501).json({ error: 'Not Implemented' }));
 
 module.exports = router;
