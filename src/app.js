@@ -3,7 +3,6 @@
 // POST, PUT/PATCH, DELETE + versionado de URIs (/api/v1).
 
 const express = require('express');
-const headersContext = require('./middleware/headers.middleware');
 
 const usersRoutes = require('./routes/users.routes');
 const workoutsRoutes = require('./routes/workouts.routes');
@@ -16,9 +15,6 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// EV09 Paso 5 — Cabeceras HTTP globales
-app.use(headersContext);
-
 // Ruta raíz — demuestra res.send() (texto) y versionado disponible
 app.get('/', (req, res) => {
   res.set('X-API-Version', 'v1');
@@ -28,21 +24,7 @@ app.get('/', (req, res) => {
 // Health — demuestra res.json()
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', version: 'v1', uptime: process.uptime() });
-});
-
-// Demo de cabeceras: lee req.get() y devuelve eco + fija res.set()
-app.get('/api/v1/headers/demo', (req, res) => {
-  res.set('X-Demo', 'headers');
-  res.status(200).json({
-    request: {
-      contentType: req.get('Content-Type') || null,
-      authorization: req.get('Authorization') || null,
-      apiKey: req.get('X-API-Key') || null,
-      customEcho: req.get('X-Custom-Header') || null,
-    },
-    note: 'Cabeceras leídas con req.get() y respondidas con res.set() + res.status().json()',
-  });
-});
+})
 
 // EV09 — Rutas versionadas por recurso (/api/v1/...)
 app.use('/api/v1/users', usersRoutes);

@@ -45,15 +45,7 @@ router.get('/:id', validateIdParam, (req, res) => {
   if (!user) {
     return res.status(404).json({ error: 'Not Found', message: `Usuario ${req.validatedId} no existe.` });
   }
-  // Eco didáctico de cabeceras de entrada (req.get / req.headers)
-  return res.status(200).json({
-    data: user,
-    meta: {
-      contentType: req.get('Content-Type') || null,
-      authorization: req.get('Authorization') || null,
-      apiKeyReceived: req.get('X-API-Key') ? true : false,
-    },
-  });
+  return res.status(200).json({ data: user });
 });
 
 // POST /api/v1/users — creación, valida req.body, responde 201 Created

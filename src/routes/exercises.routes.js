@@ -48,14 +48,7 @@ router.get('/:id', validateIdParam, (req, res) => {
   if (!exercise) {
     return res.status(404).json({ error: 'Not Found', message: `Ejercicio ${req.validatedId} no existe.` });
   }
-  return res.status(200).json({
-    data: exercise,
-    meta: {
-      contentType: req.get('Content-Type') || null,
-      authorization: req.get('Authorization') || null,
-      apiKeyReceived: req.get('X-API-Key') ? true : false,
-    },
-  });
+  return res.status(200).json({ data: exercise });
 });
 
 // POST /api/v1/exercises — 201 Created
