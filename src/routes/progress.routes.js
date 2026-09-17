@@ -24,7 +24,23 @@ router.get('/:id', (req, res) => {
   return res.status(200).json({ data: entry });
 });
 
-router.post('/', (req, res) => res.status(501).json({ error: 'Not Implemented' }));
+// EV09 Paso 7 — POST: creación de recursos, valida req.body, responde 201 Created
+router.post('/', (req, res) => {
+  const { userId, workoutId, date, weightKg, notes } = req.body || {}; // req.body (express.json)
+  if (!userId || !workoutId) {
+    return res.status(400).json({ error: 'Bad Request', message: 'Campos requeridos: userId, workoutId.' });
+  }
+  const created = {
+    id: progress.length ? Math.max(...progress.map((p) => p.id)) + 1 : 1,
+    userId,
+    workoutId,
+    date: date ?? new Date().toISOString().slice(0, 10),
+    weightKg: weightKg ?? null,
+    notes: notes ?? null,
+  };
+  progress.push(created);
+  return res.status(201).json({ message: 'Registro de progreso creado.', data: created }); // 201
+});
 router.put('/:id', (req, res) => res.status(501).json({ error: 'Not Implemented' }));
 router.patch('/:id', (req, res) => res.status(501).json({ error: 'Not Implemented' }));
 router.delete('/:id', (req, res) => res.status(501).json({ error: 'Not Implemented' }));
