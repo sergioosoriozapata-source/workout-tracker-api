@@ -1,37 +1,75 @@
 const express = require('express');
-const { progress } = require('../data/store');
+const { progress, seq } = require('../data/store');
+const validateIdParam = require('../middleware/validateId.middleware');
 
 const router = express.Router();
 
-// EV09 Paso 2 — scaffold del router progress. Endpoints básicos (se implementan por pasos).
+// GET /api/v1/progress/ping — demuestra res.send()
 router.get('/ping', (req, res) => {
   res.set('X-Resource', 'progress');
-  res.send('progress API ok'); // res.send() para texto plano
+  res.send('progress API ok');
 });
 
-// EV09 Paso 2 — GET: listar todos y obtener uno por ID (res.json)
+// GET /api/v1/progress — ?limit=10&userId=1&workoutId=1
 router.get('/', (req, res) => {
-  res.set('X-Resource', 'progress');
-  return res.status(200).json({ data: progress, total: progress.length }); // 200 OK
-});
+  try {
+    const { limit, userId, workoutId } = req.query;
+    let result = [...progress];
 
-router.get('/:id', (req, res) => {
-  const id = Number(req.params.id); // req.params
-  const entry = progress.find((p) => p.id === id);
-  if (!entry) {
-    return res.status(404).json({ error: 'Not Found', message: `Progreso ${req.params.id} no existe.` });
+    if (userId !== undefined) {
+      const uid = Number(userId);
+      if (!Number.isInteger(uid) || uid <= 0) {
+        return res.status(400).json({ error: 'Bad Request', message: '?userId debe ser entero positivo.' });
+      }
+      result = result.filter((p) => p.userId === uid);
+    }
+    if (workoutId !== undefined) {
+      const wid = Number(workoutId);
+      if (!Number.isInteger(wid) || wid <= 0) {
+        return res.status(400).json({ error: 'Bad Request', message: '?workoutId debe ser entero positivo.' });
+      }
+      result = result.filter((p) => p.workoutId === wid);
+    }
+    if (limit !== undefined) {
+      const n = Number(limit);
+      if (!Number.isInteger(n) || n < 0) {
+        return res.status(400).json({ error: 'Bad Request', message: '?limit debe ser entero >= 0.' });
+      }
+      result = result.slice(0, n);
+    }
+
+    res.set('X-Resource', 'progress');
+    res.set('X-Total-Count', String(result.length));
+    return res.status(200).json({ data: result, total: result.length });
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal Server Error', message: err.message });
   }
-  return res.status(200).json({ data: entry });
 });
 
-// EV09 Paso 7 — POST: creación de recursos, valida req.body, responde 201 Created
+// GET /api/v1/progress/:id
+router.get('/:id', validateIdParam, (req, res) => {
+  const entry = progress.find((p) => p.id === req.validatedId);
+  if (!entry) {
+    return res.status(404).json({ error: 'Not Found', message: `Progreso ${req.validatedId} no existe.` });
+  }
+  return res.status(200).json({
+    data: entry,
+    meta: {
+      contentType: req.get('Content-Type') || null,
+      authorization: req.get('Authorization') || null,
+      apiKeyReceived: req.get('X-API-Key') ? true : false,
+    },
+  });
+});
+
+// POST /api/v1/progress — 201 Created
 router.post('/', (req, res) => {
-  const { userId, workoutId, date, weightKg, notes } = req.body || {}; // req.body (express.json)
+  const { userId, workoutId, date, weightKg, notes } = req.body || {};
   if (!userId || !workoutId) {
     return res.status(400).json({ error: 'Bad Request', message: 'Campos requeridos: userId, workoutId.' });
   }
   const created = {
-    id: progress.length ? Math.max(...progress.map((p) => p.id)) + 1 : 1,
+    id: seq.nextProgressId(),
     userId,
     workoutId,
     date: date ?? new Date().toISOString().slice(0, 10),
@@ -39,29 +77,31 @@ router.post('/', (req, res) => {
     notes: notes ?? null,
   };
   progress.push(created);
-  return res.status(201).json({ message: 'Registro de progreso creado.', data: created }); // 201
+  return res.status(201).json({ message: 'Registro de progreso creado.', data: created });
 });
-// EV09 Paso 8 — PUT: actualización COMPLETA (exige todos los campos)
-router.put('/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const index = progress.findIndex((p) => p.id === id);
+
+// PUT /api/v1/progress/:id — completa
+router.put('/:id', validateIdParam, (req, res) => {
+  const index = progress.findIndex((p) => p.id === req.validatedId);
   if (index === -1) {
-    return res.status(404).json({ error: 'Not Found', message: `Progreso ${id} no existe.` });
+    return res.status(404).json({ error: 'Not Found', message: `Progreso ${req.validatedId} no existe.` });
   }
   const { userId, workoutId, date, weightKg, notes } = req.body || {};
   if (!userId || !workoutId || !date || weightKg === undefined || notes === undefined) {
-    return res.status(400).json({ error: 'Bad Request', message: 'PUT exige recurso completo: userId, workoutId, date, weightKg, notes.' });
+    return res.status(400).json({
+      error: 'Bad Request',
+      message: 'PUT exige recurso completo: userId, workoutId, date, weightKg, notes.',
+    });
   }
-  progress[index] = { id, userId, workoutId, date, weightKg, notes };
+  progress[index] = { id: req.validatedId, userId, workoutId, date, weightKg, notes };
   return res.status(200).json({ message: 'Progreso actualizado (PUT).', data: progress[index] });
 });
 
-// EV09 Paso 8 — PATCH: actualización PARCIAL (solo campos enviados)
-router.patch('/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const entry = progress.find((p) => p.id === id);
+// PATCH /api/v1/progress/:id — parcial
+router.patch('/:id', validateIdParam, (req, res) => {
+  const entry = progress.find((p) => p.id === req.validatedId);
   if (!entry) {
-    return res.status(404).json({ error: 'Not Found', message: `Progreso ${id} no existe.` });
+    return res.status(404).json({ error: 'Not Found', message: `Progreso ${req.validatedId} no existe.` });
   }
   const allowed = ['userId', 'workoutId', 'date', 'weightKg', 'notes'];
   const keys = Object.keys(req.body || {});
@@ -75,15 +115,15 @@ router.patch('/:id', (req, res) => {
   Object.assign(entry, req.body);
   return res.status(200).json({ message: 'Progreso actualizado (PATCH).', data: entry });
 });
-// EV09 Paso 9 — DELETE: 204 No Content si elimina, 404 si no existe
-router.delete('/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const index = progress.findIndex((p) => p.id === id);
+
+// DELETE /api/v1/progress/:id — 204
+router.delete('/:id', validateIdParam, (req, res) => {
+  const index = progress.findIndex((p) => p.id === req.validatedId);
   if (index === -1) {
-    return res.status(404).json({ error: 'Not Found', message: `Progreso ${id} no existe.` });
+    return res.status(404).json({ error: 'Not Found', message: `Progreso ${req.validatedId} no existe.` });
   }
   progress.splice(index, 1);
-  return res.status(204).send(); // 204 sin cuerpo
+  return res.status(204).send();
 });
 
 module.exports = router;
