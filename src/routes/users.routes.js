@@ -1,30 +1,62 @@
 const express = require('express');
-const { users } = require('../data/store');
+const { users, seq } = require('../data/store');
+const validateIdParam = require('../middleware/validateId.middleware');
 
 const router = express.Router();
 
-// EV09 Paso 2 — scaffold del router users. Endpoints básicos (se implementan por pasos).
+// GET /api/v1/users/ping — demuestra res.send() (texto plano) vs res.json()
 router.get('/ping', (req, res) => {
   res.set('X-Resource', 'users');
-  res.send('users API ok'); // res.send() para texto plano
+  res.send('users API ok'); // res.send() para formato texto
 });
 
-// EV09 Paso 2 — GET: listar todos y obtener uno por ID (res.json)
+// GET /api/v1/users — lista + query strings: ?limit=10&search=ana
+// EV09 Paso 2 (GET) + Paso 3 (query strings / filtros)
 router.get('/', (req, res) => {
-  res.set('X-Resource', 'users');
-  return res.status(200).json({ data: users, total: users.length }); // 200 OK
-});
+  try {
+    const { limit, search } = req.query; // req.query
+    let result = [...users];
 
-router.get('/:id', (req, res) => {
-  const id = Number(req.params.id); // req.params
-  const user = users.find((u) => u.id === id);
-  if (!user) {
-    return res.status(404).json({ error: 'Not Found', message: `Usuario ${req.params.id} no existe.` });
+    if (search) {
+      const q = String(search).toLowerCase();
+      result = result.filter(
+        (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+      );
+    }
+    if (limit !== undefined) {
+      const n = Number(limit);
+      if (!Number.isInteger(n) || n < 0) {
+        return res.status(400).json({ error: 'Bad Request', message: 'Query ?limit debe ser entero >= 0.' });
+      }
+      result = result.slice(0, n);
+    }
+
+    res.set('X-Resource', 'users');
+    res.set('X-Total-Count', String(result.length));
+    return res.status(200).json({ data: result, total: result.length }); // 200 OK
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal Server Error', message: err.message });
   }
-  return res.status(200).json({ data: user });
 });
 
-// EV09 Paso 7 — POST: creación de recursos, valida req.body, responde 201 Created
+// GET /api/v1/users/:id — req.params + validación + 404
+router.get('/:id', validateIdParam, (req, res) => {
+  const user = users.find((u) => u.id === req.validatedId);
+  if (!user) {
+    return res.status(404).json({ error: 'Not Found', message: `Usuario ${req.validatedId} no existe.` });
+  }
+  // Eco didáctico de cabeceras de entrada (req.get / req.headers)
+  return res.status(200).json({
+    data: user,
+    meta: {
+      contentType: req.get('Content-Type') || null,
+      authorization: req.get('Authorization') || null,
+      apiKeyReceived: req.get('X-API-Key') ? true : false,
+    },
+  });
+});
+
+// POST /api/v1/users — creación, valida req.body, responde 201 Created
 router.post('/', (req, res) => {
   const { name, email, age, goal } = req.body || {}; // req.body (express.json)
   if (!name || !email) {
@@ -33,31 +65,33 @@ router.post('/', (req, res) => {
   if (users.some((u) => u.email === email)) {
     return res.status(400).json({ error: 'Bad Request', message: 'El email ya está registrado.' });
   }
-  const created = { id: users.length ? Math.max(...users.map((u) => u.id)) + 1 : 1, name, email, age: age ?? null, goal: goal ?? null };
+  const created = { id: seq.nextUserId(), name, email, age: age ?? null, goal: goal ?? null };
   users.push(created);
   return res.status(201).json({ message: 'Usuario creado.', data: created }); // 201
 });
-// EV09 Paso 8 — PUT: actualización COMPLETA (exige todos los campos)
-router.put('/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const index = users.findIndex((u) => u.id === id);
+
+// PUT /api/v1/users/:id — actualización COMPLETA (exige todos los campos)
+router.put('/:id', validateIdParam, (req, res) => {
+  const index = users.findIndex((u) => u.id === req.validatedId);
   if (index === -1) {
-    return res.status(404).json({ error: 'Not Found', message: `Usuario ${id} no existe.` });
+    return res.status(404).json({ error: 'Not Found', message: `Usuario ${req.validatedId} no existe.` });
   }
   const { name, email, age, goal } = req.body || {};
   if (!name || !email || age === undefined || goal === undefined) {
-    return res.status(400).json({ error: 'Bad Request', message: 'PUT exige recurso completo: name, email, age, goal.' });
+    return res.status(400).json({
+      error: 'Bad Request',
+      message: 'PUT exige recurso completo: name, email, age, goal.',
+    });
   }
-  users[index] = { id, name, email, age, goal };
+  users[index] = { id: req.validatedId, name, email, age, goal };
   return res.status(200).json({ message: 'Usuario actualizado (PUT).', data: users[index] });
 });
 
-// EV09 Paso 8 — PATCH: actualización PARCIAL (solo campos enviados)
-router.patch('/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const user = users.find((u) => u.id === id);
+// PATCH /api/v1/users/:id — actualización PARCIAL (solo campos enviados)
+router.patch('/:id', validateIdParam, (req, res) => {
+  const user = users.find((u) => u.id === req.validatedId);
   if (!user) {
-    return res.status(404).json({ error: 'Not Found', message: `Usuario ${id} no existe.` });
+    return res.status(404).json({ error: 'Not Found', message: `Usuario ${req.validatedId} no existe.` });
   }
   const allowed = ['name', 'email', 'age', 'goal'];
   const keys = Object.keys(req.body || {});
@@ -71,12 +105,12 @@ router.patch('/:id', (req, res) => {
   Object.assign(user, req.body);
   return res.status(200).json({ message: 'Usuario actualizado (PATCH).', data: user });
 });
-// EV09 Paso 9 — DELETE: 204 No Content si elimina, 404 si no existe
-router.delete('/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const index = users.findIndex((u) => u.id === id);
+
+// DELETE /api/v1/users/:id — 204 No Content si elimina, 404 si no existe
+router.delete('/:id', validateIdParam, (req, res) => {
+  const index = users.findIndex((u) => u.id === req.validatedId);
   if (index === -1) {
-    return res.status(404).json({ error: 'Not Found', message: `Usuario ${id} no existe.` });
+    return res.status(404).json({ error: 'Not Found', message: `Usuario ${req.validatedId} no existe.` });
   }
   users.splice(index, 1);
   return res.status(204).send(); // 204 sin cuerpo
