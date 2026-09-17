@@ -1,37 +1,71 @@
 const express = require('express');
-const { workouts } = require('../data/store');
+const { workouts, seq } = require('../data/store');
+const validateIdParam = require('../middleware/validateId.middleware');
 
 const router = express.Router();
 
-// EV09 Paso 2 — scaffold del router workouts. Endpoints básicos (se implementan por pasos).
+// GET /api/v1/workouts/ping — demuestra res.send()
 router.get('/ping', (req, res) => {
   res.set('X-Resource', 'workouts');
-  res.send('workouts API ok'); // res.send() para texto plano
+  res.send('workouts API ok');
 });
 
-// EV09 Paso 2 — GET: listar todas y obtener una por ID (res.json)
+// GET /api/v1/workouts — ?limit=10&level=intermedio&userId=1
 router.get('/', (req, res) => {
-  res.set('X-Resource', 'workouts');
-  return res.status(200).json({ data: workouts, total: workouts.length }); // 200 OK
-});
+  try {
+    const { limit, level, userId } = req.query;
+    let result = [...workouts];
 
-router.get('/:id', (req, res) => {
-  const id = Number(req.params.id); // req.params
-  const workout = workouts.find((w) => w.id === id);
-  if (!workout) {
-    return res.status(404).json({ error: 'Not Found', message: `Rutina ${req.params.id} no existe.` });
+    if (level) {
+      result = result.filter((w) => w.level === String(level).toLowerCase());
+    }
+    if (userId !== undefined) {
+      const uid = Number(userId);
+      if (!Number.isInteger(uid) || uid <= 0) {
+        return res.status(400).json({ error: 'Bad Request', message: '?userId debe ser entero positivo.' });
+      }
+      result = result.filter((w) => w.userId === uid);
+    }
+    if (limit !== undefined) {
+      const n = Number(limit);
+      if (!Number.isInteger(n) || n < 0) {
+        return res.status(400).json({ error: 'Bad Request', message: '?limit debe ser entero >= 0.' });
+      }
+      result = result.slice(0, n);
+    }
+
+    res.set('X-Resource', 'workouts');
+    res.set('X-Total-Count', String(result.length));
+    return res.status(200).json({ data: result, total: result.length });
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal Server Error', message: err.message });
   }
-  return res.status(200).json({ data: workout });
 });
 
-// EV09 Paso 7 — POST: creación de recursos, valida req.body, responde 201 Created
+// GET /api/v1/workouts/:id
+router.get('/:id', validateIdParam, (req, res) => {
+  const workout = workouts.find((w) => w.id === req.validatedId);
+  if (!workout) {
+    return res.status(404).json({ error: 'Not Found', message: `Rutina ${req.validatedId} no existe.` });
+  }
+  return res.status(200).json({
+    data: workout,
+    meta: {
+      contentType: req.get('Content-Type') || null,
+      authorization: req.get('Authorization') || null,
+      apiKeyReceived: req.get('X-API-Key') ? true : false,
+    },
+  });
+});
+
+// POST /api/v1/workouts — 201 Created
 router.post('/', (req, res) => {
-  const { userId, name, date, durationMin, level } = req.body || {}; // req.body (express.json)
+  const { userId, name, date, durationMin, level } = req.body || {};
   if (!userId || !name) {
     return res.status(400).json({ error: 'Bad Request', message: 'Campos requeridos: userId, name.' });
   }
   const created = {
-    id: workouts.length ? Math.max(...workouts.map((w) => w.id)) + 1 : 1,
+    id: seq.nextWorkoutId(),
     userId,
     name,
     date: date ?? new Date().toISOString().slice(0, 10),
@@ -39,29 +73,31 @@ router.post('/', (req, res) => {
     level: level ?? 'principiante',
   };
   workouts.push(created);
-  return res.status(201).json({ message: 'Rutina creada.', data: created }); // 201
+  return res.status(201).json({ message: 'Rutina creada.', data: created });
 });
-// EV09 Paso 8 — PUT: actualización COMPLETA (exige todos los campos)
-router.put('/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const index = workouts.findIndex((w) => w.id === id);
+
+// PUT /api/v1/workouts/:id — actualización completa
+router.put('/:id', validateIdParam, (req, res) => {
+  const index = workouts.findIndex((w) => w.id === req.validatedId);
   if (index === -1) {
-    return res.status(404).json({ error: 'Not Found', message: `Rutina ${id} no existe.` });
+    return res.status(404).json({ error: 'Not Found', message: `Rutina ${req.validatedId} no existe.` });
   }
   const { userId, name, date, durationMin, level } = req.body || {};
   if (!userId || !name || !date || durationMin === undefined || !level) {
-    return res.status(400).json({ error: 'Bad Request', message: 'PUT exige recurso completo: userId, name, date, durationMin, level.' });
+    return res.status(400).json({
+      error: 'Bad Request',
+      message: 'PUT exige recurso completo: userId, name, date, durationMin, level.',
+    });
   }
-  workouts[index] = { id, userId, name, date, durationMin, level };
+  workouts[index] = { id: req.validatedId, userId, name, date, durationMin, level };
   return res.status(200).json({ message: 'Rutina actualizada (PUT).', data: workouts[index] });
 });
 
-// EV09 Paso 8 — PATCH: actualización PARCIAL (solo campos enviados)
-router.patch('/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const workout = workouts.find((w) => w.id === id);
+// PATCH /api/v1/workouts/:id — actualización parcial
+router.patch('/:id', validateIdParam, (req, res) => {
+  const workout = workouts.find((w) => w.id === req.validatedId);
   if (!workout) {
-    return res.status(404).json({ error: 'Not Found', message: `Rutina ${id} no existe.` });
+    return res.status(404).json({ error: 'Not Found', message: `Rutina ${req.validatedId} no existe.` });
   }
   const allowed = ['userId', 'name', 'date', 'durationMin', 'level'];
   const keys = Object.keys(req.body || {});
@@ -75,15 +111,15 @@ router.patch('/:id', (req, res) => {
   Object.assign(workout, req.body);
   return res.status(200).json({ message: 'Rutina actualizada (PATCH).', data: workout });
 });
-// EV09 Paso 9 — DELETE: 204 No Content si elimina, 404 si no existe
-router.delete('/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const index = workouts.findIndex((w) => w.id === id);
+
+// DELETE /api/v1/workouts/:id — 204
+router.delete('/:id', validateIdParam, (req, res) => {
+  const index = workouts.findIndex((w) => w.id === req.validatedId);
   if (index === -1) {
-    return res.status(404).json({ error: 'Not Found', message: `Rutina ${id} no existe.` });
+    return res.status(404).json({ error: 'Not Found', message: `Rutina ${req.validatedId} no existe.` });
   }
   workouts.splice(index, 1);
-  return res.status(204).send(); // 204 sin cuerpo
+  return res.status(204).send();
 });
 
 module.exports = router;
