@@ -1,0 +1,30 @@
+{
+  "name": "workout-tracker-api",
+  "version": "1.0.0",
+  "description": "API RESTful Workout Tracker - GA1-220501098-03-AA1-EV09 (Node.js + Express)",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sergioosoriozapata-source/workout-tracker-api.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/sergioosoriozapata-source/workout-tracker-api/issues"
+  },
+  "homepage": "https://github.com/sergioosoriozapata-source/workout-tracker-api#readme",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "mysql2": "^3.24.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
