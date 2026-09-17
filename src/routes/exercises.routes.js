@@ -75,6 +75,15 @@ router.patch('/:id', (req, res) => {
   Object.assign(exercise, req.body);
   return res.status(200).json({ message: 'Ejercicio actualizado (PATCH).', data: exercise });
 });
-router.delete('/:id', (req, res) => res.status(501).json({ error: 'Not Implemented' }));
+// EV09 Paso 9 — DELETE: 204 No Content si elimina, 404 si no existe
+router.delete('/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const index = exercises.findIndex((e) => e.id === id);
+  if (index === -1) {
+    return res.status(404).json({ error: 'Not Found', message: `Ejercicio ${id} no existe.` });
+  }
+  exercises.splice(index, 1);
+  return res.status(204).send(); // 204 sin cuerpo
+});
 
 module.exports = router;
