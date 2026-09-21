@@ -20,16 +20,25 @@ Base URL: `http://localhost:3000` · Versión API: `/api/v1`.
 ```text
 workout-tracker-api/
 ├── src/
-│   ├── server.js                  # arranque (dotenv + listen)
-│   ├── app.js                     # app Express, parsers, rutas /api/v1, 404/500
-│   ├── data/store.js              # datos en memoria (se migra a MySQL/mysql2)
+│   ├── server.js                      # arranque: importa app + puerto desde config/env
+│   ├── app.js                         # app Express, parsers, montaje /api/v1, 404/500
+│   ├── config/
+│   │   └── env.js                     # importa .env y exporta { port, apiKey, nodeEnv }
+│   ├── controllers/
+│   │   ├── users.controller.js        # lógica CRUD de users
+│   │   ├── workouts.controller.js     # lógica CRUD de workouts
+│   │   ├── exercises.controller.js    # lógica CRUD de exercises
+│   │   └── progress.controller.js     # lógica CRUD de progress
+│   ├── data/store.js                  # datos en memoria (se migra a MySQL/mysql2)
 │   ├── middleware/
-│   │   └── validateId.middleware.js # valida :id entero positivo -> 400
+│   │   └── validateId.middleware.js   # valida :id entero positivo -> 400
 │   └── routes/
-│       ├── users.routes.js
-│       ├── workouts.routes.js
-│       ├── exercises.routes.js
-│       └── progress.routes.js
+│       └── v1/                        # rutas versionadas (/api/v1/...)
+│           ├── index.js               # barril: centraliza users, workouts, exercises, progress
+│           ├── users.routes.js        # define rutas y delega al controlador
+│           ├── workouts.routes.js
+│           ├── exercises.routes.js
+│           └── progress.routes.js
 ├── .env / .env.example
 ├── package.json (scripts start/dev, deps: express, mysql2, dotenv)
 └── README.md

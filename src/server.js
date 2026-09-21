@@ -1,8 +1,6 @@
-require('dotenv').config();
 const app = require('./app');
+const { port } = require('./config/env');
 
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log(`Workout Tracker API v1 escuchando en http://localhost:${PORT}`);
+app.listen(port, () => {
+  console.log(`Servidor Express escuchando en http://localhost:${port}`);
 });
